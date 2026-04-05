@@ -28,6 +28,13 @@ pipeline {
                 }
             }
         }
+        stage('Check') {
+            steps {
+                dir("code") {
+                    sh 'ls -la'
+                }
+            }
+        }
         stage('Deliver') { 
             steps {
                 sh './jenkins/scripts/deliver.sh' 
