@@ -1,0 +1,211 @@
+pipeline {
+    agent any
+
+    parameters {
+        choice(
+            name: 'ENV',
+            choices: ['dev', 'stage', 'prod'],
+            description: 'Выберите окружение для деплоя'
+        )
+        booleanParam(
+            name: 'SKIP_TESTS',
+            defaultValue: false,
+            description: 'Пропустить выполнение тестов'
+        )
+        string(
+            name: 'VERSION',
+            defaultValue: 'latest',
+            description: 'Версия для деплоя (тег Docker image)'
+        )
+    }
+
+    environment {
+        DEV_URL = 'http://dev.example.com'
+        STAGE_URL = 'http://stage.example.com'
+        PROD_URL = 'http://prod.example.com'
+        BUILD_TIMESTAMP = sh(script: "date +'%Y-%m-%d_%H-%M-%S'", returnStdout: true).trim()
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                echo 'Клонируем репозиторий...'
+                checkout scm
+                echo "Ветка: ${env.BRANCH_NAME}"
+                echo "Версия: ${params.VERSION}"
+            }
+        }
+
+        stage('Build') {
+            steps {
+                echo "🔨 Сборка проекта для окружения ${params.ENV}..."
+                sh '''
+                    echo "Building application..."
+                    mkdir -p build
+                    echo "Version: ${VERSION}" > build/version.txt
+                    echo "Environment: ${ENV}" >> build/version.txt
+                    echo "Build timestamp: ${BUILD_TIMESTAMP}" >> build/version.txt
+                '''
+            }
+            post {
+                success {
+                    archiveArtifacts artifacts: 'build/*.txt', fingerprint: true
+                }
+            }
+        }
+
+        stage('Run Tests') {
+            when {
+                expression { params.SKIP_TESTS == false }
+            }
+            steps {
+                echo "🧪 Запуск тестов для окружения ${params.ENV}..."
+                
+                // ИСПРАВЛЕНИЕ 1: parallel должен быть внутри script
+                script {
+                    parallel(
+                        "Unit Tests": {
+                            sh '''
+                                echo "Running unit tests..."
+                                sleep 2
+                                echo "✅ Unit tests passed (15/15)"
+                            '''
+                        },
+                        "Integration Tests": {
+                            sh '''
+                                echo "Running integration tests..."
+                                sleep 3
+                                echo "✅ Integration tests passed (8/8)"
+                            '''
+                        },
+                        "Security Tests": {
+                            sh '''
+                                echo "Running security scan..."
+                                sleep 2
+                                echo "✅ Security scan passed"
+                            '''
+                        }
+                    )
+                }
+            }
+            post {
+                always {
+                    junit testResults: '**/test-results/*.xml', allowEmptyResults: true
+                }
+            }
+        }
+
+        stage('Deploy') {
+            when {
+                expression { env.BRANCH_NAME == 'main' || env.BRANCH_NAME == 'master' }
+            }
+            steps {
+                echo "🚀 Начинаем деплой в окружение: ${params.ENV}"
+                
+                // ИСПРАВЛЕНИЕ 2: script блок для if/switch
+                script {
+                    switch(params.ENV) {
+                        case 'dev':
+                            echo "📦 Деплой в DEV окружение"
+                            sh '''
+                                echo "Deploying to DEV server at ${DEV_URL}"
+                                echo "Pulling image myapp:${VERSION}"
+                                echo "Restarting containers..."
+                                echo "✅ DEV deployment completed"
+                            '''
+                            break
+                            
+                        case 'stage':
+                            echo "📦 Деплой в STAGE окружение"
+                            sh '''
+                                echo "Deploying to STAGE server at ${STAGE_URL}"
+                                echo "Running pre-deploy checks..."
+                                echo "Deploying myapp:${VERSION} to stage"
+                                echo "Running smoke tests..."
+                                echo "✅ STAGE deployment completed"
+                            '''
+                            break
+                            
+                        case 'prod':
+                            input(
+                                message: "⚠️ ПОДТВЕРДИТЕ ДЕПЛОЙ В PRODUCTION ⚠️",
+                                ok: "Да, деплою!",
+                                parameters: [
+                                    string(
+                                        name: 'CONFIRM_VERSION',
+                                        defaultValue: params.VERSION,
+                                        description: 'Введите версию для деплоя (подтверждение)'
+                                    ),
+                                    text(
+                                        name: 'REASON',
+                                        defaultValue: '',
+                                        description: 'Причина деплоя (обязательно)'
+                                    )
+                                ],
+                                submitterParameter: 'APPROVED_BY'
+                            )
+                            
+                            echo "✅ Деплой подтверждён пользователем: ${APPROVED_BY}"
+                            echo "Причина: ${REASON}"
+                            
+                            sh '''
+                                echo "🚨 ВНИМАНИЕ! Деплой в PRODUCTION!"
+                                echo "Deploying to PROD server at ${PROD_URL}"
+                                echo "Version: ${CONFIRM_VERSION}"
+                                echo "Running blue-green deployment..."
+                                sleep 5
+                                echo "✅ PRODUCTION deployment completed"
+                            '''
+                            break
+                            
+                        default:
+                            error("Неизвестное окружение: ${params.ENV}")
+                    }
+                }
+            }
+        }
+        
+        stage('Health Check') {
+            when {
+                expression { params.ENV != 'dev' }
+            }
+            steps {
+                echo "🏥 Проверка здоровья после деплоя..."
+                sh '''
+                    echo "Checking health endpoint..."
+                    sleep 2
+                    echo "Health check: OK"
+                '''
+            }
+        }
+    }
+
+    post {
+        always {
+            echo "🏁 Завершение пайплайна для ${params.ENV}"
+        }
+        success {
+            echo "🎉 ✅ УСПЕХ! Деплой в ${params.ENV} завершён успешно!"
+        }
+        failure {
+            echo "💥 ❌ ПРОВАЛ! Пайплайн упал на этапе ${env.STAGE_NAME}"
+            
+            // ИСПРАВЛЕНИЕ 3: script внутри post
+            script {
+                if (params.ENV == 'prod') {
+                    echo "🚨 КРИТИЧНО: Провал деплоя в PRODUCTION!"
+                    sh '''
+                        echo "Rolling back production deployment..."
+                        echo "Previous version restored"
+                    '''
+                }
+            }
+        }
+        unstable {
+            echo "⚠️ Нестабильная сборка"
+        }
+        aborted {
+            echo "🛑 Пайплайн отменён пользователем"
+        }
+    }
+}

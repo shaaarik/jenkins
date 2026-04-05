@@ -38,12 +38,19 @@ pipeline {
                 archiveArtifacts(artifacts: 'code/target/*.jar')
             }
             // post {
-            //         success { 
-            //             sh """
-            //             curl -X POST -H 'Content-type: application/json' \
-            //             --data '{"chat_id": "-8572143233", "text": "Никита Шаров собрал приложение." }' \
-            //             https://api.telegram.org/bot8572143233:AAGYx1PLrK37_8AJzP_66tfXdUjA8iUYon8/sendMessage """
-            //         }
+            //     success {
+            //         echo "✅ Успех! Ветка ${env.BRANCH_NAME} собралась и тесты пройдены."
+            //         // Опционально: отметить commit статусом success в GitHub
+            //         // githubNotify context: 'Jenkins CI', status: 'SUCCESS'
+            //     }
+            //     unstable {
+            //         echo "⚠️ Нестабильно! Тесты упали, но сборка завершилась."
+            //         // githubNotify context: 'Jenkins CI', status: 'FAILURE'
+            //     }
+            //     failure {
+            //         echo "❌ Критическая ошибка! Ветка ${env.BRANCH_NAME} не собралась."
+            //         // githubNotify context: 'Jenkins CI', status: 'FAILURE'
+            //     }
             // }
         }
     }
