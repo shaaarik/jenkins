@@ -6,9 +6,7 @@ pipeline {
     }
 
     tools {
-        maven 'maven-3.8.1' // Для сборки бэкенда нужен Maven
-        //jdk 'jdk16' // И Java Developer Kit нужной версии
-        nodejs 'node-16' // А NodeJS нужен для фронта
+        maven 'Maven-3'
     }
 
     stages {
@@ -21,23 +19,9 @@ pipeline {
 
             post {
                 success {
-                    junit 'backend/target/surefire-reports/**/*.xml' // Передадим результаты тестов в Jenkins
+                    junit 'target/surefire-reports/**/*.xml' // Передадим результаты тестов в Jenkins
                 }
             }
         }
-        
-        ; stage('Save artifacts') {
-        ;     steps {
-        ;         archiveArtifacts(artifacts: 'code/target/*.jar')
-        ;     }
-        ;     post {
-        ;             success { 
-        ;                 sh """
-        ;                 curl -X POST -H 'Content-type: application/json' \
-        ;                 --data '{"chat_id": "-1002332977243", "text": "Никита Шаров собрал приложение." }' \
-        ;                 https://api.telegram.org/bot5933756043:AAE8JLL5KIzgrNBeTP5e-1bkbJy4YRoeGjs/sendMessage """
-        ;             }
-        ;     }
-        ; }
     }
 }
