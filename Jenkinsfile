@@ -1,26 +1,36 @@
 pipeline {
-    agent any // Выбираем Jenkins агента, на котором будет происходить сборка: нам нужен любой
+    agent any
 
     triggers {
-        pollSCM('0 2 * * *') // Запускать будем автоматически по крону примерно раз в 5 минут
+        pollSCM('0 2 * * *') 
     }
 
     tools {
         maven 'Maven-3'
     }
-
     stages {
         stage('Build') {
             steps {
-                dir("code") { // Переходим в папку backend
-                    sh 'mvn compile' // Собираем мавеном бэкенд
+                dir("code") { 
+                    sh 'mvn -B -DskipTests clean package' 
                 }
             }
-
-            post {
-                success {
-                    junit 'target/surefire-reports/**/*.xml' // Передадим результаты тестов в Jenkins
+        }
+        stage('Test') {
+            steps {
+                dir("code") {
+                    sh 'mvn test'
                 }
+            }
+            post {
+                always {
+                    junit 'target/surefire-reports/*.xml'
+                }
+            }
+        }
+        stage('Deliver') { 
+            steps {
+                sh './jenkins/scripts/deliver.sh' 
             }
         }
     }
